@@ -1,0 +1,44 @@
+{
+    "score_similarite_moyen": 0.602,
+    "score_exact_match_moyen": 0.567,
+    "correctes": 3,
+    "partiellement_correctes": 1,
+    "incorrectes": 1,
+    "detail": [
+        {
+            "question": "Quels concerts sont prévus à Rennes ?",
+            "evaluation_manuelle": "correcte",
+            "score_similarite": 0.665,
+            "score_exact_match": 0.333,
+            "commentaire": "Le RAG retourne des concerts valides."
+        },
+        {
+            "question": "Y a-t-il des expositions à Rennes ?",
+            "evaluation_manuelle": "partiellement correcte",
+            "score_similarite": 0.475,
+            "score_exact_match": 0.333,
+            "commentaire": "Le RAG identifie correctement des expositions mais retourne aussi Cet été à Rennes qui est un événement généraliste et non une exposition. Le chunk de cet événement contient le mot exposition ce qui biaise la recherche sémantique"
+        },
+        {
+            "question": "Quels événements ont lieu en septembre 2026 ?",
+            "evaluation_manuelle": "incorrecte",
+            "score_similarite": 0.491,
+            "score_exact_match": 1.0,
+            "commentaire": "Problème : dates au format non compris par le modèle d'embedding"
+        },
+        {
+            "question": "Y a-t-il des événements sportifs à Rennes ?",
+            "evaluation_manuelle": "correcte",
+            "score_similarite": 0.755,
+            "score_exact_match": 0.667,
+            "commentaire": "Bonne identification des événements sportifs"
+        },
+        {
+            "question": "Y a-t-il des événements gratuits ?",
+            "evaluation_manuelle": "correcte",
+            "score_similarite": 0.625,
+            "score_exact_match": 0.5,
+            "commentaire": "Bonne identification des événements gratuits"
+        }
+    ]
+}

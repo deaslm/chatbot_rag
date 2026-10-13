@@ -1,0 +1,20 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\yavas\chatbot_rag\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\yavas\chatbot_rag
+plugins: anyio-4.15.1, langsmith-0.14.4, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 10 items
+
+tests/test_unitaires.py::test_csv_non_vide PASSED                        [ 10%]
+tests/test_unitaires.py::test_csv_sans_nan_texte PASSED                  [ 20%]
+tests/test_unitaires.py::test_index_faiss_existe PASSED                  [ 30%]
+tests/test_unitaires.py::test_index_faiss_non_vide PASSED                [ 40%]
+tests/test_unitaires.py::test_metadonnees_coherentes PASSED              [ 50%]
+tests/test_unitaires.py::test_recherche_retourne_5_resultats PASSED      [ 60%]
+tests/test_unitaires.py::test_temps_recherche_acceptable PASSED          [ 70%]
+tests/test_unitaires.py::test_similarite_cosinus_identique PASSED        [ 80%]
+tests/test_unitaires.py::test_similarite_cosinus_differents PASSED       [ 90%]
+tests/test_unitaires.py::test_exact_match_theme_correct PASSED           [100%]
+
+============================= 10 passed in 16.71s =============================
