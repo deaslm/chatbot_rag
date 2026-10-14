@@ -2,8 +2,4 @@
 __pycache__/
 *.pyc
 .env
-data/raw/
-data/processed/
-faiss_index/
-*.index
 .DS_Store

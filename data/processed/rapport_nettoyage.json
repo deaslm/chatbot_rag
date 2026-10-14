@@ -1,0 +1,23 @@
+{
+    "evenements_bruts": 500,
+    "evenements_nettoyes": 483,
+    "evenements_supprimes": 17,
+    "nan_avant_nettoyage": {
+        "title_fr": 17,
+        "description_fr": 17,
+        "longdescription_fr": 68,
+        "keywords_fr": 143,
+        "category": 500
+    },
+    "nan_apres_nettoyage": 0,
+    "colonnes_supprimees": [
+        "category"
+    ],
+    "colonnes_nan_remplaces_par_chaine_vide": [
+        "title_fr",
+        "description_fr",
+        "longdescription_fr",
+        "keywords_fr"
+    ],
+    "nouvelle_colonne_creee": "texte_complet"
+}
