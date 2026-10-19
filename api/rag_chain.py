@@ -82,7 +82,7 @@ def repondre(question):
     # LLM Mistral via Ollama
     llm = Ollama(
         model="mistral",
-        base_url="http://localhost:11434"
+        base_url="http://host.docker.internal:11434"
     )
 
     # Construction de la chaîne RAG avec LCEL (LangChain Expression Language)
