@@ -1,6 +1,8 @@
 langchain
 langchain-community
+langchain-core
 langchain-mistralai
+langchain-huggingface
 sentence-transformers
 faiss-cpu
 fastapi

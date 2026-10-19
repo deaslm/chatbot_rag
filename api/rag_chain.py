@@ -1,104 +1,109 @@
-# Cœur du système RAG : connecte FAISS et Mistral (via Ollama en local)
+# Cœur du système RAG - orchestré par LangChain (LCEL/LangChain Expression Language) qui connecte FAISS, embeddings et Mistral
 
-import faiss
-import pickle
-import numpy as np
 import os
-import requests
-from sentence_transformers import SentenceTransformer
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.llms import Ollama
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
 from dotenv import load_dotenv
 
-# Chargement des variables d'environnement (.env)
 load_dotenv()
 
-# Chemins vers l'index FAISS et les métadonnées
-CHEMIN_INDEX = "faiss_index/index.faiss"
-CHEMIN_META = "faiss_index/metadonnees.pkl"
-
-# Modèle d'embedding — le meme que celui utilisé pour construire l'index
 MODELE_EMBEDDING = "all-MiniLM-L6-v2"
-
-# Nombre de chunks pertinents à récupérer depuis FAISS
 NB_RESULTATS = 5
 
-def charger_index():
-    """Charge l'index FAISS et les métadonnées depuis le disque."""
-    index = faiss.read_index(CHEMIN_INDEX)
-    with open(CHEMIN_META, "rb") as f:
-        metadonnees = pickle.load(f)
-    return index, metadonnees
-
-def rechercher_chunks(question, index, metadonnees, modele):
+def charger_vectorstore():
     """
-    Vectorise la question et cherche les chunks les plus proches dans FAISS.
+    Charge l'index FAISS.
     """
-    # Vectorisation de la question avec le même modèle que l'index
-    vecteur_question = modele.encode([question]).astype("float32")
+    embeddings = HuggingFaceEmbeddings(model_name=MODELE_EMBEDDING)
+    vectorstore = FAISS.load_local(
+        "faiss_index",
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+    return vectorstore
 
-    # Recherche dans FAISS
-    distances, indices = index.search(vecteur_question, NB_RESULTATS)
-
-    # Récupération des métadonnées des chunks trouvés
-    resultats = [metadonnees[i] for i in indices[0] if i < len(metadonnees)]
-    return resultats
-
-def construire_prompt(question, chunks):
+def construire_prompt_template():
     """
-    Construit le prompt envoyé à Mistral. On injecte les chunks pertinents comme contexte.
+    Crée un PromptTemplate LangChain.
+    {context} sera injecté automatiquement par le retriever.
+    {question} sera injecté par l'utilisateur.
     """
-    contexte = "\n\n".join([
-        f"Événement : {c['titre']}\n"
-        f"Date : {c['date_debut']} → {c['date_fin']}\n"
-        f"Lieu : {c['adresse']}, {c['ville']}\n"
-        f"Description : {c['texte']}\n"
-        f"Lien : {c['url']}"
-        for c in chunks
-    ])
-
-    prompt = f"""Tu es un assistant culturel spécialisé dans les événements de Rennes.
+    template = """Tu es un assistant culturel spécialisé dans les événements de Rennes.
 Réponds à la question de l'utilisateur en te basant sur les événements ci-dessous.
 Si aucun événement ne correspond, dis-le clairement.
 
 Événements disponibles :
-{contexte}
+{context}
 
 Question : {question}
 Réponse :"""
-    return prompt
+
+    return PromptTemplate(
+        template=template,
+        input_variables=["context", "question"]
+    )
+
+def formater_documents(docs):
+    """
+    Formate les Documents LangChain retournés par FAISS en texte lisible pour le prompt.
+    Chaque document contient page_content + metadata.
+    """
+    return "\n\n".join([
+        f"Événement : {doc.metadata.get('titre', '')}\n"
+        f"Date : {doc.metadata.get('date_debut', '')} → {doc.metadata.get('date_fin', '')}\n"
+        f"Horaires : {doc.metadata.get('horaires', '')}\n"
+        f"Lieu : {doc.metadata.get('adresse', '')}, {doc.metadata.get('ville', '')}\n"
+        f"Description : {doc.page_content}\n"
+        f"Lien : {doc.metadata.get('url', '')}"
+        for doc in docs
+    ])
 
 def repondre(question):
     """
-    Fonction principale du RAG :
-    1. Cherche les chunks pertinents dans FAISS
-    2. Construit le prompt avec le contexte
-    3. Envoie à Mistral via Ollama et retourne la réponse
+    Fonction principale du RAG.
+
+    La chaine LangChain fait automatiquement :
+    1. retriever   -> cherche les chunks pertinents dans FAISS
+    2. prompt      -> injecte les chunks et la question dans le template
+    3. llm         -> envoie à Mistral via Ollama
+    4. StrOutputParser -> extrait le texte de la réponse
     """
-    # Chargement de l'index et du modèle
-    index, metadonnees = charger_index()
-    modele = SentenceTransformer(MODELE_EMBEDDING)
+    if not question.strip():
+        return "La question ne peut pas être vide."
 
-    # Recherche des chunks pertinents
-    chunks = rechercher_chunks(question, index, metadonnees, modele)
+    # Chargement du vectorstore et création du retriever LangChain
+    vectorstore = charger_vectorstore()
+    retriever = vectorstore.as_retriever(search_kwargs={"k": NB_RESULTATS})
 
-    # Construction du prompt
-    prompt = construire_prompt(question, chunks)
-
-    # Appel à Mistral via Ollama
-    response = requests.post(
-        "http://host.docker.internal:11434/api/chat",
-        json={
-            "model": "mistral",
-            "messages": [{"role": "user", "content": prompt}],
-            "stream": False  # on veut la réponse complète d'un coup
-        }
+    # LLM Mistral via Ollama
+    llm = Ollama(
+        model="mistral",
+        base_url="http://localhost:11434"
     )
 
-    # Gestion des erreurs
-    data = response.json()
-    if "message" not in data:
-        return f"Erreur Ollama : {data}"
+    # Construction de la chaîne RAG avec LCEL (LangChain Expression Language)
+    # Le pipe connecte chaque étape : retriever, prompt, llm, parser
+    prompt = construire_prompt_template()
+    chain = (
+        {
+            # context : documents récupérés par FAISS et formatés
+            "context": retriever | formater_documents,
+            # question : transmise directement à l'étape suivante
+            "question": RunnablePassthrough()
+        }
+        | prompt      # injection dans le template
+        | llm         # génération par Mistral
+        | StrOutputParser()  # extraction du texte final
+    )
 
-    return data["message"]["content"]
+    try:
+        return chain.invoke(question)
+    except Exception as e:
+        return f"Erreur lors de la génération : {str(e)}"
 
 if __name__ == "__main__":
     questions = [

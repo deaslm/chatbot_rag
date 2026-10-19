@@ -1,27 +1,25 @@
 # Tests unitaires validant :
-# 1. L'indexation des données (FAISS + métadonnées)
-# 2. Les performances du système (temps de réponse, résultats)
-# 3. Les métriques d'évaluation (similarité cosinus, exact match)
+# 1. L'indexation des données (FAISS via LangChain)
+# 2. Les performances du système
+# 3. Les métriques d'évaluation
 
 import sys
 import os
 import time
-import faiss
-import pickle
 import pandas as pd
 import pytest
-from sentence_transformers import SentenceTransformer
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from scripts.evaluation_reponses import similarite_cosinus, exact_match_thematique
 
-CHEMIN_INDEX = "faiss_index/index.faiss"
-CHEMIN_META = "faiss_index/metadonnees.pkl"
+CHEMIN_INDEX = "faiss_index"
 CHEMIN_CSV = "data/processed/events_rennes_nettoyes.csv"
 MODELE = "all-MiniLM-L6-v2"
 
 # =============================================
-# TESTS D'INDEXATION
+# 1. TESTS D'INDEXATION
 # =============================================
 
 def test_csv_non_vide():
@@ -37,64 +35,80 @@ def test_csv_sans_nan_texte():
     print("Pas de NaN dans texte_complet")
 
 def test_index_faiss_existe():
-    """Vérifie que les fichiers FAISS sont bien présents."""
-    assert os.path.exists(CHEMIN_INDEX)
-    assert os.path.exists(CHEMIN_META)
-    print("Fichiers FAISS présents")
+    """Vérifie que les fichiers FAISS LangChain sont bien présents."""
+    assert os.path.exists(os.path.join(CHEMIN_INDEX, "index.faiss"))
+    assert os.path.exists(os.path.join(CHEMIN_INDEX, "index.pkl"))
+    print("Fichiers FAISS LangChain présents")
 
 def test_index_faiss_non_vide():
     """Vérifie que l'index FAISS contient des vecteurs."""
-    index = faiss.read_index(CHEMIN_INDEX)
-    assert index.ntotal > 0
-    print(f"Index FAISS contient {index.ntotal} vecteurs")
+    embeddings = HuggingFaceEmbeddings(model_name=MODELE)
+    vectorstore = FAISS.load_local(
+        CHEMIN_INDEX, embeddings,
+        allow_dangerous_deserialization=True
+    )
+    assert vectorstore.index.ntotal > 0
+    print(f"Index FAISS contient {vectorstore.index.ntotal} vecteurs")
 
 def test_metadonnees_coherentes():
-    """Vérifie que le nombre de métadonnées correspond au nombre de vecteurs."""
-    index = faiss.read_index(CHEMIN_INDEX)
-    with open(CHEMIN_META, "rb") as f:
-        metadonnees = pickle.load(f)
-    assert len(metadonnees) == index.ntotal
-    print(f"{len(metadonnees)} métadonnées pour {index.ntotal} vecteurs")
+    """Vérifie que les métadonnées sont bien associées aux vecteurs."""
+    embeddings = HuggingFaceEmbeddings(model_name=MODELE)
+    vectorstore = FAISS.load_local(
+        CHEMIN_INDEX, embeddings,
+        allow_dangerous_deserialization=True
+    )
+     
+    nb_docs = len(vectorstore.docstore._dict)              # docstore contient les métadonnées
+    assert nb_docs == vectorstore.index.ntotal
+    print(f"{nb_docs} métadonnées pour {vectorstore.index.ntotal} vecteurs")
 
 # =============================================
-# TESTS DE PERFORMANCES
+# 2. TESTS DE PERFORMANCES
 # =============================================
 
 def test_recherche_retourne_5_resultats():
-    """Vérifie que FAISS retourne bien 5 résultats."""
-    index = faiss.read_index(CHEMIN_INDEX)
-    modele = SentenceTransformer(MODELE)
-    vecteur = modele.encode(["concerts à Rennes"]).astype("float32")
-    distances, indices = index.search(vecteur, 5)
-    assert len(indices[0]) == 5
+    """Vérifie que FAISS retourne bien 5 résultats via LangChain."""
+    embeddings = HuggingFaceEmbeddings(model_name=MODELE)
+    vectorstore = FAISS.load_local(
+        CHEMIN_INDEX, embeddings,
+        allow_dangerous_deserialization=True
+    )
+    # similarity_search pour chercher dans FAISS
+    resultats = vectorstore.similarity_search("événement gratuit", k=5)
+    assert len(resultats) == 5
     print("FAISS retourne bien 5 résultats")
 
 def test_temps_recherche_acceptable():
     """Vérifie que la recherche FAISS prend moins de 2 secondes."""
-    index = faiss.read_index(CHEMIN_INDEX)
-    modele = SentenceTransformer(MODELE)
-    vecteur = modele.encode(["concerts à Rennes"]).astype("float32")
+    embeddings = HuggingFaceEmbeddings(model_name=MODELE)
+    vectorstore = FAISS.load_local(
+        CHEMIN_INDEX, embeddings,
+        allow_dangerous_deserialization=True
+    )
     debut = time.time()
-    index.search(vecteur, 5)
+    vectorstore.similarity_search("événement gratuit", k=5)
     duree = time.time() - debut
     assert duree < 2.0, f"Recherche trop lente : {duree:.2f}s"
     print(f"Temps de recherche : {duree:.3f}s")
 
 # =============================================
-# TESTS MÉTRIQUES D'ÉVALUATION
+# 3. TESTS MÉTRIQUES D'ÉVALUATION
 # =============================================
 
 def test_similarite_cosinus_identique():
     """Deux textes identiques doivent avoir similarité = 1."""
-    modele = SentenceTransformer(MODELE)
-    score = similarite_cosinus("concert à Rennes", "concert à Rennes", modele)
+    modele = HuggingFaceEmbeddings(model_name=MODELE)
+    from sentence_transformers import SentenceTransformer
+    st_modele = SentenceTransformer(MODELE)
+    score = similarite_cosinus("événement gratuit", "événement gratuit", st_modele)
     assert score == 1.0
     print(f"Similarité textes identiques : {score}")
 
 def test_similarite_cosinus_differents():
     """Deux textes différents doivent avoir similarité < 1."""
-    modele = SentenceTransformer(MODELE)
-    score = similarite_cosinus("concert de jazz", "forum emploi", modele)
+    from sentence_transformers import SentenceTransformer
+    st_modele = SentenceTransformer(MODELE)
+    score = similarite_cosinus("concert de jazz", "emploi recrutement", st_modele)
     assert score < 1.0
     print(f"Similarité textes différents : {score}")
 
@@ -108,7 +122,7 @@ def test_exact_match_theme_correct():
     print(f"Exact match thématique : {score}")
 
 if __name__ == "__main__":
-    print("🧪 Lancement des tests unitaires...\n")
+    print("Lancement des tests unitaires...\n")
     print("--- INDEXATION ---")
     test_csv_non_vide()
     test_csv_sans_nan_texte()

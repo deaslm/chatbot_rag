@@ -29,6 +29,7 @@ Démontrer la faisabilité technique d'un chatbot RAG capable de :
 ## 2. Architecture du système
 
 ### Schéma
+**LangChain LCEL** orchestre automatiquement les deux pipelines via `RunnablePassthrough`et `StrOutputParser`.
 
 **PIPELINE D'INDEXATION :**  
 API OpenAgenda -> Nettoyage (Pandas) -> Chunking (512 car.) -> Embeddings (all-MiniLM-L6-v2) -> Index FAISS(IndexFlatL2)
@@ -45,7 +46,7 @@ Nettoyage / Prétraitement des données : Pandas
 Embeddings / Vectorisation des textes : sentence-transformers  
 Base vectorielle / Recherche par similarité : FAISS (IndexFlatL2)   
 LLM / Génération de réponses : Mistral via Ollama  
-Orchestration / Pipeline RAG : LangChain  
+Orchestration / Pipeline RAG : LangChain (LCEL - chaîne retriever -> prompt -> LLM))
 API / Exposition du système : FastAPI Uvicorn  
 Conteneurisation / Déploiement local : Docker  
 
